@@ -291,6 +291,83 @@ async function run() {
       }
     });
 
+    // Cash In route
+    app.post("/cash-in", async (req, res) => {
+      const { receiverIdentifier, amount, pin } = req.body;
+      const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
+
+      try {
+        // Find sender's and receiver's information
+        const sender = await userCollection.findOne({ email: senderEmail });
+        let receiver;
+
+        // Determine if receiverIdentifier is email or mobile
+        if (receiverIdentifier.includes("@")) {
+          receiver = await userCollection.findOne({
+            email: receiverIdentifier,
+          });
+        } else {
+          receiver = await userCollection.findOne({
+            mobile: receiverIdentifier,
+          });
+        }
+
+        // Check if sender and receiver exist
+        if (!sender || !receiver) {
+          return res.status(404).json({ message: "Receiver not found" });
+        }
+
+        // Check if the sender is an agent
+        if (sender.userType !== "agent") {
+          return res
+            .status(403)
+            .json({ message: "Only agents can do cash in" });
+        }
+
+        // Verify sender's PIN
+        const isPinMatch = await bcrypt.compare(pin.toString(), sender.pin);
+        if (!isPinMatch) {
+          return res.status(401).json({ message: "Invalid PIN" });
+        }
+
+        // Validate amount
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+          return res.status(400).json({ message: "Invalid amount" });
+        }
+
+        // Check if sender has sufficient balance
+        if (sender.balance < numericAmount) {
+          return res.status(400).json({ message: "Insufficient balance" });
+        }
+
+        // Perform the transaction
+        const updatedSenderBalance = parseFloat(sender.balance) - numericAmount;
+        const updatedReceiverBalance =
+          parseFloat(receiver.balance) + numericAmount;
+
+        // Update balances in the database
+        await userCollection.updateOne(
+          { _id: sender._id },
+          { $set: { balance: updatedSenderBalance } }
+        );
+
+        await userCollection.updateOne(
+          { _id: receiver._id },
+          { $set: { balance: updatedReceiverBalance } }
+        );
+
+        res.json({
+          message: "Money sent successfully",
+          sender: sender.email,
+          receiver: receiver.email,
+        });
+      } catch (error) {
+        console.error("Error sending money:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
     // Protected route example
     app.get("/protected", verifyToken, (req, res) => {
       res.send({ message: "This is a protected route", user: req.user });
