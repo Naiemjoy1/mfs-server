@@ -326,7 +326,16 @@ async function run() {
 
         // Check if the sender is an agent
         if (sender.userType !== "agent") {
-          return res.status(403).json({ message: "Only agents can do cash" });
+          return res
+            .status(403)
+            .json({ message: "Only agents can do cash-in" });
+        }
+
+        // Ensure the receiver is a user and not an agent
+        if (receiver.userType !== "user") {
+          return res
+            .status(403)
+            .json({ message: "Agents can only send to users" });
         }
 
         // Verify sender's PIN
