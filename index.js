@@ -1,7 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -109,6 +109,37 @@ async function run() {
     app.get("/users", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
+    });
+
+    // Delete user route
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await userCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
+    // Backend route to update user status
+    app.patch("/users/status/:email", async (req, res) => {
+      const email = req.params.email;
+      const { status } = req.body;
+
+      try {
+        const updatedUser = await userCollection.updateOne(
+          { email },
+          { $set: { status } }
+        );
+
+        if (updatedUser.modifiedCount > 0) {
+          res.send({ modifiedCount: updatedUser.modifiedCount });
+        } else {
+          res
+            .status(404)
+            .send({ message: "User not found or status not updated" });
+        }
+      } catch (error) {
+        console.error("Error updating user status:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
     });
 
     // Login API
@@ -414,18 +445,9 @@ async function run() {
     });
 
     // Get transaction history
-    app.get("/transaction-history", async (req, res) => {
-      try {
-        const transactions = await client
-          .db("mfsDB")
-          .collection("transactions")
-          .find()
-          .toArray();
-        res.json(transactions);
-      } catch (error) {
-        console.error("Error fetching transaction history:", error);
-        res.status(500).json({ message: "Internal server error" });
-      }
+    app.get("/history", async (req, res) => {
+      const result = await transactionCollection.find().toArray();
+      res.send(result);
     });
 
     // Protected route example
