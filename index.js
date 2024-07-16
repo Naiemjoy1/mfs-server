@@ -111,11 +111,12 @@ async function run() {
       res.send(result);
     });
 
+    // role api
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const user = await userCollection.findOne(
         { email },
-        { projection: { userType: 1 } } // Only return the userType field
+        { projection: { userType: 1, status: 1 } }
       );
       if (user) {
         res.json(user);
@@ -227,7 +228,7 @@ async function run() {
     // Send money route
     app.post("/send-money", async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
-      const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
+      const senderEmail = req.body.senderEmail;
 
       try {
         // Find sender's and receiver's information
@@ -268,13 +269,17 @@ async function run() {
           return res.status(400).json({ message: "Invalid amount" });
         }
 
+        // Calculate transaction fee
+        const fee = numericAmount > 100 ? 5 : 0;
+        const totalAmount = numericAmount + fee;
+
         // Check if sender has sufficient balance
-        if (sender.balance < numericAmount) {
+        if (sender.balance < totalAmount) {
           return res.status(400).json({ message: "Insufficient balance" });
         }
 
         // Perform the transaction
-        const updatedSenderBalance = parseFloat(sender.balance) - numericAmount;
+        const updatedSenderBalance = parseFloat(sender.balance) - totalAmount;
         const updatedReceiverBalance =
           parseFloat(receiver.balance) + numericAmount;
 
@@ -298,7 +303,7 @@ async function run() {
         );
 
         res.json({
-          message: "Money sent successfully",
+          message: `Money sent successfully. Transaction fee: ${fee}`,
           sender: sender.email,
           receiver: receiver.email,
         });
