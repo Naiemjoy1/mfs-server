@@ -164,7 +164,14 @@ async function run() {
         }
 
         if (!sender || !receiver) {
-          return res.status(404).json({ message: "receiver not found" });
+          return res.status(404).json({ message: "Receiver not found" });
+        }
+
+        // Check user types
+        if (sender.userType !== "user" || receiver.userType !== "user") {
+          return res
+            .status(403)
+            .json({ message: "Users can only send to other users" });
         }
 
         // Verify sender's PIN
@@ -319,9 +326,7 @@ async function run() {
 
         // Check if the sender is an agent
         if (sender.userType !== "agent") {
-          return res
-            .status(403)
-            .json({ message: "Only agents can do cash in" });
+          return res.status(403).json({ message: "Only agents can do cash" });
         }
 
         // Verify sender's PIN
