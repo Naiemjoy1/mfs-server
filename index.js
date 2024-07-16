@@ -118,7 +118,7 @@ async function run() {
       res.send(result);
     });
 
-    // Backend route to update user status
+    //route to update user status
     app.patch("/users/status/:email", async (req, res) => {
       const email = req.params.email;
       const { status } = req.body;
@@ -138,6 +138,31 @@ async function run() {
         }
       } catch (error) {
         console.error("Error updating user status:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    //role change api
+    app.patch("/users/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      const { userType } = req.body;
+      const updatedDoc = { $set: { userType } };
+
+      try {
+        const result = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          updatedDoc
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({ modifiedCount: result.modifiedCount });
+        } else {
+          res
+            .status(404)
+            .send({ message: "User not found or role not updated" });
+        }
+      } catch (error) {
+        console.error("Error updating user role:", error);
         res.status(500).send({ message: "Internal server error" });
       }
     });
