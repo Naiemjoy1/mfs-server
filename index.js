@@ -26,6 +26,19 @@ async function run() {
   try {
     await client.connect();
     const userCollection = client.db("mfsDB").collection("users");
+    const transactionCollection = client.db("mfsDB").collection("transactions");
+
+    //log api
+    const logTransaction = async (type, sender, receiver, amount) => {
+      const transaction = {
+        type,
+        sender,
+        receiver,
+        amount,
+        timestamp: new Date(),
+      };
+      await transactionCollection.insertOne(transaction);
+    };
 
     // JWT API
     app.post("/jwt", async (req, res) => {
@@ -207,6 +220,14 @@ async function run() {
           { $set: { balance: updatedReceiverBalance } }
         );
 
+        // Log the transaction
+        await logTransaction(
+          "send-money",
+          sender.email,
+          receiver.email,
+          numericAmount
+        );
+
         res.json({
           message: "Money sent successfully",
           sender: sender.email,
@@ -279,6 +300,14 @@ async function run() {
         await userCollection.updateOne(
           { _id: receiver._id },
           { $set: { balance: updatedReceiverBalance } }
+        );
+
+        // Log the transaction
+        await logTransaction(
+          "cash-out",
+          sender.email,
+          receiver.email,
+          numericAmount
         );
 
         res.json({
@@ -365,6 +394,14 @@ async function run() {
           { $set: { balance: updatedReceiverBalance } }
         );
 
+        // Log the transaction
+        await logTransaction(
+          "cash-in",
+          sender.email,
+          receiver.email,
+          numericAmount
+        );
+
         res.json({
           message: "Money sent successfully",
           sender: sender.email,
@@ -372,6 +409,21 @@ async function run() {
         });
       } catch (error) {
         console.error("Error sending money:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // Get transaction history
+    app.get("/transaction-history", async (req, res) => {
+      try {
+        const transactions = await client
+          .db("mfsDB")
+          .collection("transactions")
+          .find()
+          .toArray();
+        res.json(transactions);
+      } catch (error) {
+        console.error("Error fetching transaction history:", error);
         res.status(500).json({ message: "Internal server error" });
       }
     });
