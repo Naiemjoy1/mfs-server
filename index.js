@@ -72,7 +72,7 @@ async function run() {
       let initialBalance = 0;
       if (userType === "user") {
         initialBalance = 40;
-      } else if (userType === "admin") {
+      } else if (userType === "agent") {
         initialBalance = 10000;
       }
 
