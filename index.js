@@ -360,12 +360,17 @@ async function run() {
           return res.status(400).json({ message: "Invalid amount" });
         }
 
+        // Calculate fee (1.5% of the amount)
+        const feeAmount = numericAmount * 0.015;
+        const netAmount = numericAmount + feeAmount;
+
         if (sender.balance < numericAmount) {
           return res.status(400).json({ message: "Insufficient balance" });
         }
 
-        const updatedSenderBalance = sender.balance - numericAmount;
-        const updatedReceiverBalance = receiver.balance + numericAmount;
+        const updatedSenderBalance =
+          sender.balance - (numericAmount + feeAmount);
+        const updatedReceiverBalance = receiver.balance + netAmount;
 
         await userCollection.updateOne(
           { _id: sender._id },
@@ -388,6 +393,7 @@ async function run() {
           message: "Cash Out successfully done",
           sender: sender.email,
           receiver: receiver.email,
+          fee: feeAmount, // Include fee in the response
         });
       } catch (error) {
         console.error("Error sending money:", error);
