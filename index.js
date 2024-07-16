@@ -54,7 +54,7 @@ async function run() {
 
     // User registration route
     app.post("/users", async (req, res) => {
-      const { name, pin, mobile, email, profileImage } = req.body;
+      const { name, pin, mobile, email, profileImage, userType } = req.body;
 
       // Check if user already exists
       const existingUser = await userCollection.findOne({
@@ -68,6 +68,14 @@ async function run() {
       const salt = await bcrypt.genSalt(10);
       const hashedPin = await bcrypt.hash(pin.toString(), salt);
 
+      // Set initial balance based on user type
+      let initialBalance = 0;
+      if (userType === "user") {
+        initialBalance = 40;
+      } else if (userType === "admin") {
+        initialBalance = 10000;
+      }
+
       // Create new user
       const newUser = {
         name,
@@ -75,7 +83,8 @@ async function run() {
         mobile,
         email,
         profileImage,
-        balance: 0,
+        userType,
+        balance: initialBalance,
         status: "pending",
       };
 
@@ -127,6 +136,7 @@ async function run() {
           mobile: user.mobile,
           balance: user.balance,
           status: user.status,
+          userType: user.userType,
           profileImage: user.profileImage,
         },
       });
