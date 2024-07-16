@@ -111,6 +111,19 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await userCollection.findOne(
+        { email },
+        { projection: { userType: 1 } } // Only return the userType field
+      );
+      if (user) {
+        res.json(user);
+      } else {
+        res.status(404).send("User not found");
+      }
+    });
+
     // Delete user route
     app.delete("/users/:id", async (req, res) => {
       const id = req.params.id;
