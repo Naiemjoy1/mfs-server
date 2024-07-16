@@ -2,12 +2,13 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion } = require("mongodb");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -26,9 +27,34 @@ async function run() {
     await client.connect();
     const userCollection = client.db("mfsDB").collection("users");
 
+    // JWT API
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
+    });
+
+    // Middleware to verify JWT token
+    const verifyToken = (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "Forbidden access" });
+      }
+      const token = authHeader.split(" ")[1];
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "Unauthorized access" });
+        }
+        req.user = decoded;
+        next();
+      });
+    };
+
     // User registration route
     app.post("/users", async (req, res) => {
-      const { name, pin, mobile, email } = req.body;
+      const { name, pin, mobile, email, profileImage } = req.body;
 
       // Check if user already exists
       const existingUser = await userCollection.findOne({
@@ -48,6 +74,7 @@ async function run() {
         pin: hashedPin,
         mobile,
         email,
+        profileImage,
         balance: 0,
         status: "pending",
       };
@@ -56,9 +83,58 @@ async function run() {
       res.status(201).json(result);
     });
 
+    // Get all users (for testing purposes)
     app.get("/users", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
+    });
+
+    // Login API
+    app.post("/login", async (req, res) => {
+      const { email, pin } = req.body;
+
+      // Find user by email or mobile
+      const user = await userCollection.findOne({
+        $or: [{ email }, { mobile: email }],
+      });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Compare hashed PIN
+      const isMatch = await bcrypt.compare(pin.toString(), user.pin);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user._id, email: user.email },
+        process.env.ACCESS_TOKEN_SECRET,
+        {
+          expiresIn: "1h",
+        }
+      );
+
+      // Return token and user data
+      res.json({
+        message: "Login successful",
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          mobile: user.mobile,
+          balance: user.balance,
+          status: user.status,
+          profileImage: user.profileImage,
+        },
+      });
+    });
+
+    // Protected route example
+    app.get("/protected", verifyToken, (req, res) => {
+      res.send({ message: "This is a protected route", user: req.user });
     });
 
     console.log("Connected to MongoDB successfully!");
