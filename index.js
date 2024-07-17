@@ -1,7 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const cors = require("cors");
-const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -9,9 +8,20 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://mobile-financial-service-8e757.web.app",
+      "https://mobile-financial-service-8e757.firebaseapp.com",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  })
+);
 app.use(express.json());
 
+const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ccm0dfs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -24,7 +34,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const userCollection = client.db("mfsDB").collection("users");
     const transactionCollection = client.db("mfsDB").collection("transactions");
 
@@ -52,15 +62,13 @@ async function run() {
 
     // Middleware
     const verifyToken = (req, res, next) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        return res.status(401).json({ message: "Forbidden access" });
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "Forbidden access" });
       }
-
-      const token = authHeader.split(" ")[1];
+      const token = req.headers.authorization.split(" ")[1];
       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
-          return res.status(401).json({ message: "Unauthorized access" });
+          return res.status(401).send({ message: "Unauthorized access" });
         }
         req.decoded = decoded;
         next();
