@@ -500,8 +500,20 @@ async function run() {
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
       try {
-        // Find sender's and receiver's information
+        // Find sender's information including user type
         const sender = await userCollection.findOne({ email: senderEmail });
+
+        if (!sender) {
+          return res.status(404).json({ message: "Sender not found" });
+        }
+
+        // Verify sender's user type
+        if (sender.userType !== "user") {
+          return res
+            .status(403)
+            .json({ message: "Only users can send cash-in requests" });
+        }
+
         let receiver;
 
         // Determine if receiverIdentifier is email or mobile
@@ -515,10 +527,8 @@ async function run() {
           });
         }
 
-        if (!sender || !receiver) {
-          return res
-            .status(404)
-            .json({ message: "Sender or receiver not found" });
+        if (!receiver) {
+          return res.status(404).json({ message: "Receiver not found" });
         }
 
         // Verify sender's PIN
@@ -537,22 +547,6 @@ async function run() {
         if (sender.balance < numericAmount) {
           return res.status(400).json({ message: "Insufficient balance" });
         }
-
-        // Perform the transaction
-        // const updatedSenderBalance = parseFloat(sender.balance) - numericAmount;
-        // const updatedReceiverBalance =
-        //   parseFloat(receiver.balance) + numericAmount;
-
-        // Update balances in the database
-        // await userCollection.updateOne(
-        //   { _id: sender._id },
-        //   { $set: { balance: updatedSenderBalance } }
-        // );
-
-        // await userCollection.updateOne(
-        //   { _id: receiver._id },
-        //   { $set: { balance: updatedReceiverBalance } }
-        // );
 
         // Log the transaction
         await logTransaction(
@@ -574,14 +568,26 @@ async function run() {
       }
     });
 
-    // Cash-in request route
+    // Cash-out request route
     app.post("/cash-out-request", async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
       try {
-        // Find sender's and receiver's information
+        // Find sender's information including user type
         const sender = await userCollection.findOne({ email: senderEmail });
+
+        if (!sender) {
+          return res.status(404).json({ message: "Sender not found" });
+        }
+
+        // Verify sender's user type
+        if (sender.userType !== "agent") {
+          return res
+            .status(403)
+            .json({ message: "Only agent can send cash-out requests" });
+        }
+
         let receiver;
 
         // Determine if receiverIdentifier is email or mobile
@@ -595,10 +601,8 @@ async function run() {
           });
         }
 
-        if (!sender || !receiver) {
-          return res
-            .status(404)
-            .json({ message: "Sender or receiver not found" });
+        if (!receiver) {
+          return res.status(404).json({ message: "Receiver not found" });
         }
 
         // Verify sender's PIN
@@ -618,25 +622,9 @@ async function run() {
           return res.status(400).json({ message: "Insufficient balance" });
         }
 
-        // Perform the transaction
-        // const updatedSenderBalance = parseFloat(sender.balance) - numericAmount;
-        // const updatedReceiverBalance =
-        //   parseFloat(receiver.balance) + numericAmount;
-
-        // Update balances in the database
-        // await userCollection.updateOne(
-        //   { _id: sender._id },
-        //   { $set: { balance: updatedSenderBalance } }
-        // );
-
-        // await userCollection.updateOne(
-        //   { _id: receiver._id },
-        //   { $set: { balance: updatedReceiverBalance } }
-        // );
-
         // Log the transaction
         await logTransaction(
-          "cash-in-request",
+          "cash-out-request",
           sender.email,
           receiverIdentifier,
           numericAmount,
