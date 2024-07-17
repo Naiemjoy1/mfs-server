@@ -34,7 +34,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const userCollection = client.db("mfsDB").collection("users");
     const transactionCollection = client.db("mfsDB").collection("transactions");
 
@@ -150,7 +150,7 @@ async function run() {
     });
 
     // Get all users (for testing purposes)
-    app.get("/users", verifyToken, async (req, res) => {
+    app.get("/users", async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
@@ -170,70 +170,60 @@ async function run() {
     });
 
     // Delete user route
-    app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
+    app.delete("/users/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const result = await userCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
     //route to update user status
-    app.patch(
-      "/users/status/:email",
-      verifyToken,
-      verifyAdmin,
-      async (req, res) => {
-        const email = req.params.email;
-        const { status } = req.body;
+    app.patch("/users/status/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const { status } = req.body;
 
-        try {
-          const updatedUser = await userCollection.updateOne(
-            { email },
-            { $set: { status } }
-          );
+      try {
+        const updatedUser = await userCollection.updateOne(
+          { email },
+          { $set: { status } }
+        );
 
-          if (updatedUser.modifiedCount > 0) {
-            res.send({ modifiedCount: updatedUser.modifiedCount });
-          } else {
-            res
-              .status(404)
-              .send({ message: "User not found or status not updated" });
-          }
-        } catch (error) {
-          console.error("Error updating user status:", error);
-          res.status(500).send({ message: "Internal server error" });
+        if (updatedUser.modifiedCount > 0) {
+          res.send({ modifiedCount: updatedUser.modifiedCount });
+        } else {
+          res
+            .status(404)
+            .send({ message: "User not found or status not updated" });
         }
+      } catch (error) {
+        console.error("Error updating user status:", error);
+        res.status(500).send({ message: "Internal server error" });
       }
-    );
+    });
 
     //role change api
-    app.patch(
-      "/users/admin/:id",
-      verifyToken,
-      verifyAdmin,
-      async (req, res) => {
-        const id = req.params.id;
-        const { userType } = req.body;
-        const updatedDoc = { $set: { userType } };
+    app.patch("/users/admin/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const { userType } = req.body;
+      const updatedDoc = { $set: { userType } };
 
-        try {
-          const result = await userCollection.updateOne(
-            { _id: new ObjectId(id) },
-            updatedDoc
-          );
+      try {
+        const result = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          updatedDoc
+        );
 
-          if (result.modifiedCount > 0) {
-            res.send({ modifiedCount: result.modifiedCount });
-          } else {
-            res
-              .status(404)
-              .send({ message: "User not found or role not updated" });
-          }
-        } catch (error) {
-          console.error("Error updating user role:", error);
-          res.status(500).send({ message: "Internal server error" });
+        if (result.modifiedCount > 0) {
+          res.send({ modifiedCount: result.modifiedCount });
+        } else {
+          res
+            .status(404)
+            .send({ message: "User not found or role not updated" });
         }
+      } catch (error) {
+        console.error("Error updating user role:", error);
+        res.status(500).send({ message: "Internal server error" });
       }
-    );
+    });
 
     // Login API
     app.post("/login", async (req, res) => {
