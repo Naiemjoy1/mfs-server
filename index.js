@@ -86,6 +86,28 @@ async function run() {
 
       next();
     };
+    // Agent Middleware
+    const verifyAgent = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await userCollection.findOne({ email });
+
+      if (!user || user.userType !== "agent") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      next();
+    };
+    // User Middleware
+    const verifyUser = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await userCollection.findOne({ email });
+
+      if (!user || user.userType !== "user") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      next();
+    };
 
     // User registration route
     app.post("/users", async (req, res) => {
@@ -259,7 +281,7 @@ async function run() {
     });
 
     // Send money route
-    app.post("/send-money", verifyToken, async (req, res) => {
+    app.post("/send-money", verifyToken, verifyUser, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail;
 
@@ -347,7 +369,7 @@ async function run() {
     });
 
     // Cash Out route
-    app.post("/cash-out", verifyToken, async (req, res) => {
+    app.post("/cash-out", verifyToken, verifyUser, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail;
 
@@ -435,7 +457,7 @@ async function run() {
     });
 
     // Cash In route
-    app.post("/cash-in", verifyToken, async (req, res) => {
+    app.post("/cash-in", verifyToken, verifyAgent, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
@@ -527,7 +549,7 @@ async function run() {
     });
 
     // Cash-in request route
-    app.post("/cash-in-request", verifyToken, async (req, res) => {
+    app.post("/cash-in-request", verifyToken, verifyUser, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
@@ -601,78 +623,83 @@ async function run() {
     });
 
     // Cash-out request route
-    app.post("/cash-out-request", verifyToken, async (req, res) => {
-      const { receiverIdentifier, amount, pin } = req.body;
-      const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
+    app.post(
+      "/cash-out-request",
+      verifyToken,
+      verifyAgent,
+      async (req, res) => {
+        const { receiverIdentifier, amount, pin } = req.body;
+        const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
-      try {
-        // Find sender's information including user type
-        const sender = await userCollection.findOne({ email: senderEmail });
+        try {
+          // Find sender's information including user type
+          const sender = await userCollection.findOne({ email: senderEmail });
 
-        if (!sender) {
-          return res.status(404).json({ message: "Sender not found" });
-        }
+          if (!sender) {
+            return res.status(404).json({ message: "Sender not found" });
+          }
 
-        // Verify sender's user type
-        if (sender.userType !== "agent") {
-          return res
-            .status(403)
-            .json({ message: "Only agent can send cash-out requests" });
-        }
+          // Verify sender's user type
+          if (sender.userType !== "agent") {
+            return res
+              .status(403)
+              .json({ message: "Only agent can send cash-out requests" });
+          }
 
-        let receiver;
+          let receiver;
 
-        // Determine if receiverIdentifier is email or mobile
-        if (receiverIdentifier.includes("@")) {
-          receiver = await userCollection.findOne({
-            email: receiverIdentifier,
+          // Determine if receiverIdentifier is email or mobile
+          if (receiverIdentifier.includes("@")) {
+            receiver = await userCollection.findOne({
+              email: receiverIdentifier,
+            });
+          } else {
+            receiver = await userCollection.findOne({
+              mobile: receiverIdentifier,
+            });
+          }
+
+          if (!receiver) {
+            return res.status(404).json({ message: "Receiver not found" });
+          }
+
+          // Verify sender's PIN
+          const isPinMatch = await bcrypt.compare(pin.toString(), sender.pin);
+          if (!isPinMatch) {
+            return res.status(401).json({ message: "Invalid PIN" });
+          }
+
+          // Validate amount
+          const numericAmount = parseFloat(amount);
+          if (isNaN(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({ message: "Invalid amount" });
+          }
+
+          // Check if sender has sufficient balance
+          if (sender.balance < numericAmount) {
+            return res.status(400).json({ message: "Insufficient balance" });
+          }
+
+          // Log the transaction
+          await logTransaction(
+            "cash-out-request",
+            sender.email,
+            receiverIdentifier,
+            numericAmount,
+            "pending"
+          );
+
+          res.json({
+            message: "Money sent successfully",
+            sender: sender.email,
+            receiver: receiver.email,
           });
-        } else {
-          receiver = await userCollection.findOne({
-            mobile: receiverIdentifier,
-          });
+        } catch (error) {
+          console.error("Error sending money:", error);
+          res.status(500).json({ message: "Internal server error" });
         }
-
-        if (!receiver) {
-          return res.status(404).json({ message: "Receiver not found" });
-        }
-
-        // Verify sender's PIN
-        const isPinMatch = await bcrypt.compare(pin.toString(), sender.pin);
-        if (!isPinMatch) {
-          return res.status(401).json({ message: "Invalid PIN" });
-        }
-
-        // Validate amount
-        const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount) || numericAmount <= 0) {
-          return res.status(400).json({ message: "Invalid amount" });
-        }
-
-        // Check if sender has sufficient balance
-        if (sender.balance < numericAmount) {
-          return res.status(400).json({ message: "Insufficient balance" });
-        }
-
-        // Log the transaction
-        await logTransaction(
-          "cash-out-request",
-          sender.email,
-          receiverIdentifier,
-          numericAmount,
-          "pending"
-        );
-
-        res.json({
-          message: "Money sent successfully",
-          sender: sender.email,
-          receiver: receiver.email,
-        });
-      } catch (error) {
-        console.error("Error sending money:", error);
-        res.status(500).json({ message: "Internal server error" });
       }
-    });
+    );
 
     // Get transaction history
     app.get("/history", verifyToken, async (req, res) => {
@@ -752,11 +779,6 @@ async function run() {
         console.error("Error updating transaction status:", error);
         res.status(500).send({ message: "An error occurred", error });
       }
-    });
-
-    // Protected route example
-    app.get("/protected", verifyToken, (req, res) => {
-      res.send({ message: "This is a protected route", user: req.user });
     });
 
     console.log("Connected to MongoDB successfully!");
