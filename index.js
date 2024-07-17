@@ -148,60 +148,70 @@ async function run() {
     });
 
     // Delete user route
-    app.delete("/users/:id", verifyAdmin, async (req, res) => {
+    app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const result = await userCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
     //route to update user status
-    app.patch("/users/status/:email", verifyAdmin, async (req, res) => {
-      const email = req.params.email;
-      const { status } = req.body;
+    app.patch(
+      "/users/status/:email",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const email = req.params.email;
+        const { status } = req.body;
 
-      try {
-        const updatedUser = await userCollection.updateOne(
-          { email },
-          { $set: { status } }
-        );
+        try {
+          const updatedUser = await userCollection.updateOne(
+            { email },
+            { $set: { status } }
+          );
 
-        if (updatedUser.modifiedCount > 0) {
-          res.send({ modifiedCount: updatedUser.modifiedCount });
-        } else {
-          res
-            .status(404)
-            .send({ message: "User not found or status not updated" });
+          if (updatedUser.modifiedCount > 0) {
+            res.send({ modifiedCount: updatedUser.modifiedCount });
+          } else {
+            res
+              .status(404)
+              .send({ message: "User not found or status not updated" });
+          }
+        } catch (error) {
+          console.error("Error updating user status:", error);
+          res.status(500).send({ message: "Internal server error" });
         }
-      } catch (error) {
-        console.error("Error updating user status:", error);
-        res.status(500).send({ message: "Internal server error" });
       }
-    });
+    );
 
     //role change api
-    app.patch("/users/admin/:id", verifyAdmin, async (req, res) => {
-      const id = req.params.id;
-      const { userType } = req.body;
-      const updatedDoc = { $set: { userType } };
+    app.patch(
+      "/users/admin/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const { userType } = req.body;
+        const updatedDoc = { $set: { userType } };
 
-      try {
-        const result = await userCollection.updateOne(
-          { _id: new ObjectId(id) },
-          updatedDoc
-        );
+        try {
+          const result = await userCollection.updateOne(
+            { _id: new ObjectId(id) },
+            updatedDoc
+          );
 
-        if (result.modifiedCount > 0) {
-          res.send({ modifiedCount: result.modifiedCount });
-        } else {
-          res
-            .status(404)
-            .send({ message: "User not found or role not updated" });
+          if (result.modifiedCount > 0) {
+            res.send({ modifiedCount: result.modifiedCount });
+          } else {
+            res
+              .status(404)
+              .send({ message: "User not found or role not updated" });
+          }
+        } catch (error) {
+          console.error("Error updating user role:", error);
+          res.status(500).send({ message: "Internal server error" });
         }
-      } catch (error) {
-        console.error("Error updating user role:", error);
-        res.status(500).send({ message: "Internal server error" });
       }
-    });
+    );
 
     // Login API
     app.post("/login", async (req, res) => {
@@ -337,7 +347,7 @@ async function run() {
     });
 
     // Cash Out route
-    app.post("/cash-out", async (req, res) => {
+    app.post("/cash-out", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail;
 
@@ -425,7 +435,7 @@ async function run() {
     });
 
     // Cash In route
-    app.post("/cash-in", async (req, res) => {
+    app.post("/cash-in", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
@@ -671,7 +681,7 @@ async function run() {
     });
 
     // Get a transaction by ID
-    app.get("/history/:id", async (req, res) => {
+    app.get("/history/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const test = await transactionCollection.findOne({
         _id: new ObjectId(id),
