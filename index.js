@@ -527,7 +527,7 @@ async function run() {
     });
 
     // Cash-in request route
-    app.post("/cash-in-request", async (req, res) => {
+    app.post("/cash-in-request", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
@@ -601,7 +601,7 @@ async function run() {
     });
 
     // Cash-out request route
-    app.post("/cash-out-request", async (req, res) => {
+    app.post("/cash-out-request", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
