@@ -34,7 +34,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
     const userCollection = client.db("mfsDB").collection("users");
     const transactionCollection = client.db("mfsDB").collection("transactions");
 
@@ -52,13 +52,13 @@ async function run() {
     };
 
     // JWT API
-    app.post("/jwt", async (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
-      });
-      res.send({ token });
-    });
+    // app.post("/jwt", async (req, res) => {
+    //   const user = req.body;
+    //   const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+    //     expiresIn: "1h",
+    //   });
+    //   res.send({ token });
+    // });
 
     // Middleware
     const verifyToken = (req, res, next) => {
@@ -128,7 +128,7 @@ async function run() {
     });
 
     // Get all users (for testing purposes)
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
@@ -229,6 +229,7 @@ async function run() {
           expiresIn: "1h",
         }
       );
+      console.log("token", token);
 
       // Return token and user data
       res.json({
@@ -664,7 +665,7 @@ async function run() {
     });
 
     // Get transaction history
-    app.get("/history", async (req, res) => {
+    app.get("/history", verifyToken, async (req, res) => {
       const result = await transactionCollection.find().toArray();
       res.send(result);
     });
