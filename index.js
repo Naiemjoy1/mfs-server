@@ -50,20 +50,33 @@ async function run() {
       res.send({ token });
     });
 
-    // Middleware to verify JWT token
+    // Middleware
     const verifyToken = (req, res, next) => {
       const authHeader = req.headers.authorization;
       if (!authHeader) {
-        return res.status(401).send({ message: "Forbidden access" });
+        return res.status(401).json({ message: "Forbidden access" });
       }
+
       const token = authHeader.split(" ")[1];
       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
-          return res.status(401).send({ message: "Unauthorized access" });
+          return res.status(401).json({ message: "Unauthorized access" });
         }
-        req.user = decoded;
+        req.decoded = decoded;
         next();
       });
+    };
+
+    // Admin Middleware
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const user = await userCollection.findOne({ email });
+
+      if (!user || user.userType !== "admin") {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      next();
     };
 
     // User registration route
@@ -127,14 +140,14 @@ async function run() {
     });
 
     // Delete user route
-    app.delete("/users/:id", async (req, res) => {
+    app.delete("/users/:id", verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const result = await userCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
     //route to update user status
-    app.patch("/users/status/:email", async (req, res) => {
+    app.patch("/users/status/:email", verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const { status } = req.body;
 
@@ -158,7 +171,7 @@ async function run() {
     });
 
     //role change api
-    app.patch("/users/admin/:id", async (req, res) => {
+    app.patch("/users/admin/:id", verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { userType } = req.body;
       const updatedDoc = { $set: { userType } };
