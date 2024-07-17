@@ -29,12 +29,13 @@ async function run() {
     const transactionCollection = client.db("mfsDB").collection("transactions");
 
     //log api
-    const logTransaction = async (type, sender, receiver, amount) => {
+    const logTransaction = async (type, sender, receiver, amount, status) => {
       const transaction = {
         type,
         sender,
         receiver,
         amount,
+        status,
         timestamp: new Date(),
       };
       await transactionCollection.insertOne(transaction);
@@ -493,10 +494,164 @@ async function run() {
       }
     });
 
+    // Cash-in request route
+    app.post("/cash-in-request", async (req, res) => {
+      const { receiverIdentifier, amount, pin } = req.body;
+      const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
+
+      try {
+        // Find sender's and receiver's information
+        const sender = await userCollection.findOne({ email: senderEmail });
+        let receiver;
+
+        // Determine if receiverIdentifier is email or mobile
+        if (receiverIdentifier.includes("@")) {
+          receiver = await userCollection.findOne({
+            email: receiverIdentifier,
+          });
+        } else {
+          receiver = await userCollection.findOne({
+            mobile: receiverIdentifier,
+          });
+        }
+
+        if (!sender || !receiver) {
+          return res
+            .status(404)
+            .json({ message: "Sender or receiver not found" });
+        }
+
+        // Verify sender's PIN
+        const isPinMatch = await bcrypt.compare(pin.toString(), sender.pin);
+        if (!isPinMatch) {
+          return res.status(401).json({ message: "Invalid PIN" });
+        }
+
+        // Validate amount
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+          return res.status(400).json({ message: "Invalid amount" });
+        }
+
+        // Check if sender has sufficient balance
+        if (sender.balance < numericAmount) {
+          return res.status(400).json({ message: "Insufficient balance" });
+        }
+
+        // Perform the transaction
+        // const updatedSenderBalance = parseFloat(sender.balance) - numericAmount;
+        // const updatedReceiverBalance =
+        //   parseFloat(receiver.balance) + numericAmount;
+
+        // Update balances in the database
+        // await userCollection.updateOne(
+        //   { _id: sender._id },
+        //   { $set: { balance: updatedSenderBalance } }
+        // );
+
+        // await userCollection.updateOne(
+        //   { _id: receiver._id },
+        //   { $set: { balance: updatedReceiverBalance } }
+        // );
+
+        // Log the transaction
+        await logTransaction(
+          "cash-in-request",
+          sender.email,
+          receiverIdentifier,
+          numericAmount,
+          "pending"
+        );
+
+        res.json({
+          message: "Money sent successfully",
+          sender: sender.email,
+          receiver: receiver.email,
+        });
+      } catch (error) {
+        console.error("Error sending money:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
     // Get transaction history
     app.get("/history", async (req, res) => {
       const result = await transactionCollection.find().toArray();
       res.send(result);
+    });
+
+    // Get a transaction by ID
+    app.get("/history/:id", async (req, res) => {
+      const id = req.params.id;
+      const test = await transactionCollection.findOne({
+        _id: new ObjectId(id),
+      });
+      res.send(test);
+    });
+
+    // PATCH route to update transaction status from pending to confirm
+    app.patch("/history/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        // Find the transaction
+        const transaction = await transactionCollection.findOne({
+          _id: new ObjectId(id),
+          status: "pending",
+        });
+
+        if (!transaction) {
+          return res
+            .status(404)
+            .send({ message: "Transaction not found or already confirmed" });
+        }
+
+        const { sender, receiver, amount } = transaction;
+
+        // Find sender and receiver
+        const senderUser = await userCollection.findOne({ email: sender });
+        const receiverUser = await userCollection.findOne({ email: receiver });
+
+        if (!senderUser || !receiverUser) {
+          return res
+            .status(404)
+            .send({ message: "Sender or receiver not found" });
+        }
+
+        // Calculate new balances
+        const updatedSenderBalance = senderUser.balance + amount;
+        const updatedReceiverBalance = receiverUser.balance - amount;
+
+        // Update balances in the database
+        await userCollection.updateOne(
+          { _id: senderUser._id },
+          { $set: { balance: updatedSenderBalance } }
+        );
+
+        await userCollection.updateOne(
+          { _id: receiverUser._id },
+          { $set: { balance: updatedReceiverBalance } }
+        );
+
+        // Update transaction status
+        const result = await transactionCollection.updateOne(
+          { _id: new ObjectId(id), status: "pending" },
+          { $set: { status: "confirm" } }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.send({
+            message: "Transaction status and balances updated successfully",
+          });
+        } else {
+          res
+            .status(404)
+            .send({ message: "Transaction not found or already confirmed" });
+        }
+      } catch (error) {
+        console.error("Error updating transaction status:", error);
+        res.status(500).send({ message: "An error occurred", error });
+      }
     });
 
     // Protected route example
