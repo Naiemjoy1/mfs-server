@@ -259,7 +259,7 @@ async function run() {
     });
 
     // Send money route
-    app.post("/send-money", async (req, res) => {
+    app.post("/send-money", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail;
 
