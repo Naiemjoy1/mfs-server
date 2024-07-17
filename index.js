@@ -690,7 +690,7 @@ async function run() {
     });
 
     // PATCH route to update transaction status from pending to confirm
-    app.patch("/history/:id", async (req, res) => {
+    app.patch("/history/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
 
       try {
