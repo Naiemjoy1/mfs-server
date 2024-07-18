@@ -258,13 +258,9 @@ async function run() {
         message: "Login successful",
         token,
         user: {
-          id: user._id,
           name: user.name,
           email: user.email,
-          mobile: user.mobile,
-          balance: user.balance,
           status: user.status,
-          userType: user.userType,
           profileImage: user.profileImage,
         },
       });
