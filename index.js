@@ -261,6 +261,7 @@ async function run() {
           name: user.name,
           email: user.email,
           status: user.status,
+          userType: user.userType,
           profileImage: user.profileImage,
         },
       });
@@ -688,9 +689,50 @@ async function run() {
     );
 
     // Get transaction history
-    app.get("/history", verifyToken, async (req, res) => {
+    app.get("/history", async (req, res) => {
       const result = await transactionCollection.find().toArray();
       res.send(result);
+    });
+
+    // Get total amounts for all transaction types
+    app.get("/history/transfers", async (req, res) => {
+      try {
+        const result = await transactionCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$type",
+                total: { $sum: "$amount" },
+              },
+            },
+          ])
+          .toArray();
+
+        // Format the response
+        const totals = {
+          cashIn: 0,
+          cashOut: 0,
+          sendMoney: 0,
+        };
+
+        result.forEach((item) => {
+          if (item._id === "cash-in") {
+            totals.cashIn = item.total;
+          } else if (item._id === "cash-out") {
+            totals.cashOut = item.total;
+          } else if (item._id === "send-money") {
+            totals.sendMoney = item.total;
+          }
+        });
+
+        // Calculate the grand total
+        totals.grandTotal = totals.cashIn + totals.cashOut + totals.sendMoney;
+
+        res.send(totals);
+      } catch (error) {
+        console.error("Error getting total amounts:", error);
+        res.status(500).send({ message: "An error occurred", error });
+      }
     });
 
     // Get a transaction by ID
