@@ -583,10 +583,10 @@ async function run() {
           return res.status(400).json({ message: "Invalid amount" });
         }
 
-        // Check if sender has sufficient balance
-        if (sender.balance < numericAmount) {
-          return res.status(400).json({ message: "Insufficient balance" });
-        }
+        // // Check if sender has sufficient balance
+        // if (sender.balance < numericAmount) {
+        //   return res.status(400).json({ message: "Insufficient balance" });
+        // }
 
         // Log the transaction
         await logTransaction(
@@ -729,6 +729,11 @@ async function run() {
           return res
             .status(404)
             .send({ message: "Sender or receiver not found" });
+        }
+
+        // Check if sender has sufficient balance
+        if (receiverUser.balance < amount) {
+          return res.status(400).send({ message: "Insufficient balance" });
         }
 
         // Calculate new balances
