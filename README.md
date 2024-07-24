@@ -26,7 +26,6 @@ This is the server-side application for a basic Mobile Financial Service (MFS) l
 ## Installation
 
 1. Clone the repository:
-   git clone
 
    ```bash
     https://github.com/Naiemjoy1/mfs-server
@@ -56,11 +55,3 @@ This is the server-side application for a basic Mobile Financial Service (MFS) l
    ```bash
    npm start
    ```
-
-## Contributing
-
-Feel free to fork this project, create a feature branch, and submit a pull request.
-
-```
-
-```
