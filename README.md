@@ -1,6 +1,5 @@
 ### Server Side README
 
-````markdown
 # Mobile Financial Service (MFS) Server
 
 This is the server-side application for a basic Mobile Financial Service (MFS) like bKash or Nagad. It is built using Node.js, Express.js, and MongoDB.
@@ -31,6 +30,7 @@ This is the server-side application for a basic Mobile Financial Service (MFS) l
    git clone https://github.com/Naiemjoy1/mfs-server
    cd mfs-server
    ```
+
 ````
 
 2. Install the dependencies:
@@ -55,3 +55,4 @@ This is the server-side application for a basic Mobile Financial Service (MFS) l
 ## Contributing
 
 Feel free to fork this project, create a feature branch, and submit a pull request.
+````
