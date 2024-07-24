@@ -735,6 +735,52 @@ async function run() {
       }
     });
 
+    // Get transaction history separated by user email, type, and total amount
+    app.get("/history/:email", async (req, res) => {
+      const { email } = req.params;
+
+      try {
+        // Find transactions where user email matches sender or receiver
+        const transactions = await transactionCollection
+          .find({
+            $or: [{ sender: email }, { receiver: email }],
+          })
+          .toArray();
+
+        // Initialize an object to store aggregated results
+        const result = {
+          cashIn: 0,
+          cashOut: 0,
+          sendMoney: 0,
+          other: 0,
+        };
+
+        // Aggregate transactions based on type and calculate total amounts
+        transactions.forEach((transaction) => {
+          switch (transaction.type) {
+            case "cash-in":
+              result.cashIn += transaction.amount;
+              break;
+            case "cash-out":
+              result.cashOut += transaction.amount;
+              break;
+            case "send-money":
+              result.sendMoney += transaction.amount;
+              break;
+            default:
+              result.other += transaction.amount;
+              break;
+          }
+        });
+
+        // Send the aggregated result as JSON response
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching transaction history:", error);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
     // Get a transaction by ID
     app.get("/history/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
