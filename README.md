@@ -32,9 +32,10 @@ This is the server-side application for a basic Mobile Financial Service (MFS) l
     https://github.com/Naiemjoy1/mfs-server
    ```
 
+   cd
+
    ```bash
-   git clone https://github.com/Naiemjoy1/mfs-server
-   cd mfs-server
+   mfs-server
    ```
 
 2. Install the dependencies:
