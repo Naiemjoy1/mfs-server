@@ -122,7 +122,7 @@ async function run() {
       if (userType === "user") {
         initialBalance = 40;
       } else if (userType === "agent") {
-        initialBalance = 10000;
+        initialBalance = 100000;
       }
 
       // Create new user
@@ -266,11 +266,10 @@ async function run() {
       const senderEmail = req.body.senderEmail;
 
       try {
-        // Find sender's and receiver's information
+        // Find sender and receiver
         const sender = await userCollection.findOne({ email: senderEmail });
         let receiver;
 
-        // Determine if receiverIdentifier is email or mobile
         if (receiverIdentifier.includes("@")) {
           receiver = await userCollection.findOne({
             email: receiverIdentifier,
@@ -281,11 +280,16 @@ async function run() {
           });
         }
 
-        if (!sender || !receiver) {
-          return res.status(404).json({ message: "Receiver not found" });
+        // Find a single admin user
+        const admin = await userCollection.findOne({ userType: "admin" });
+
+        if (!sender || !receiver || !admin) {
+          return res
+            .status(404)
+            .json({ message: "Receiver or admin not found" });
         }
 
-        // Check user types
+        // Ensure sender and receiver are normal users
         if (sender.userType !== "user" || receiver.userType !== "user") {
           return res
             .status(403)
@@ -308,28 +312,45 @@ async function run() {
         const fee = numericAmount > 100 ? 5 : 0;
         const totalAmount = numericAmount + fee;
 
-        // Check if sender has sufficient balance
+        // Check sender's balance
         if (sender.balance < totalAmount) {
           return res.status(400).json({ message: "Insufficient balance" });
         }
 
         // Perform the transaction
-        const updatedSenderBalance = parseFloat(sender.balance) - totalAmount;
-        const updatedReceiverBalance =
-          parseFloat(receiver.balance) + numericAmount;
+        const updatedSenderBalance = sender.balance - totalAmount;
+        const updatedReceiverBalance = receiver.balance + numericAmount;
+        const updatedAdminBalance = admin.balance + fee; // Add fee to admin's balance
 
-        // Update balances in the database
+        // Update sender balance
         await userCollection.updateOne(
           { _id: sender._id },
           { $set: { balance: updatedSenderBalance } }
         );
 
+        // Update receiver balance
         await userCollection.updateOne(
           { _id: receiver._id },
           { $set: { balance: updatedReceiverBalance } }
         );
 
-        // Log the transaction
+        // Update admin balance with the transaction fee
+        if (fee > 0) {
+          await userCollection.updateOne(
+            { _id: admin._id },
+            { $set: { balance: updatedAdminBalance } }
+          );
+
+          // Log transaction fee for admin
+          await logTransaction(
+            "transaction-fee",
+            sender.email,
+            admin.email,
+            fee
+          );
+        }
+
+        // Log the main transaction
         await logTransaction(
           "send-money",
           sender.email,
@@ -338,7 +359,7 @@ async function run() {
         );
 
         res.json({
-          message: `Money sent successfully. Transaction fee: ${fee}`,
+          message: `Money sent successfully. Transaction fee of ${fee} added to admin balance.`,
           sender: sender.email,
           receiver: receiver.email,
         });
