@@ -102,7 +102,8 @@ async function run() {
 
     // User registration route
     app.post("/users", async (req, res) => {
-      const { name, pin, mobile, email, profileImage, userType } = req.body;
+      const { name, pin, nid, mobile, email, profileImage, userType } =
+        req.body;
 
       // Check if user already exists
       const existingUser = await userCollection.findOne({
@@ -129,6 +130,7 @@ async function run() {
         name,
         pin: hashedPin,
         mobile,
+        nid,
         email,
         profileImage,
         userType,
