@@ -416,18 +416,32 @@ async function run() {
           return res.status(400).json({ message: "Invalid amount" });
         }
 
-        // Calculate fee (1.5% of the amount)
-        const feeAmount = numericAmount * 0.015;
-        const netAmount = numericAmount + feeAmount;
+        // Calculate total fee (1.5% of the amount)
+        const totalFee = numericAmount * 0.015;
+        const adminFee = numericAmount * 0.005; // 0.5% to admin
+        const agentFee = numericAmount * 0.01; // 1% to agent
+        const netAmount = numericAmount - totalFee; // Amount user actually sends
 
         if (sender.balance < numericAmount) {
           return res.status(400).json({ message: "Insufficient balance" });
         }
 
-        const updatedSenderBalance =
-          sender.balance - (numericAmount + feeAmount);
-        const updatedReceiverBalance = receiver.balance + netAmount;
+        // Update sender balance
+        const updatedSenderBalance = sender.balance - numericAmount;
 
+        // Update agent balance (receiver)
+        const updatedReceiverBalance = receiver.balance + netAmount + agentFee;
+
+        // Find the admin user
+        const admin = await userCollection.findOne({ userType: "admin" });
+        if (!admin) {
+          return res.status(500).json({ message: "Admin account not found" });
+        }
+
+        // Update admin balance
+        const updatedAdminBalance = admin.balance + adminFee;
+
+        // Update balances in DB
         await userCollection.updateOne(
           { _id: sender._id },
           { $set: { balance: updatedSenderBalance } }
@@ -435,6 +449,10 @@ async function run() {
         await userCollection.updateOne(
           { _id: receiver._id },
           { $set: { balance: updatedReceiverBalance } }
+        );
+        await userCollection.updateOne(
+          { _id: admin._id },
+          { $set: { balance: updatedAdminBalance } }
         );
 
         // Log the transaction
@@ -449,7 +467,9 @@ async function run() {
           message: "Cash Out successfully done",
           sender: sender.email,
           receiver: receiver.email,
-          fee: feeAmount, // Include fee in the response
+          fee: totalFee,
+          adminFee,
+          agentFee,
         });
       } catch (error) {
         console.error("Error sending money:", error);
