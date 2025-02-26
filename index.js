@@ -441,30 +441,47 @@ async function run() {
         // Update admin balance
         const updatedAdminBalance = admin.balance + adminFee;
 
-        // Update balances in DB
-        await userCollection.updateOne(
-          { _id: sender._id },
-          { $set: { balance: updatedSenderBalance } }
-        );
-        await userCollection.updateOne(
-          { _id: receiver._id },
-          { $set: { balance: updatedReceiverBalance } }
-        );
-        await userCollection.updateOne(
-          { _id: admin._id },
-          { $set: { balance: updatedAdminBalance } }
-        );
+        // Perform database updates in a single batch operation
+        const bulkOperations = [
+          {
+            updateOne: {
+              filter: { _id: sender._id },
+              update: { $set: { balance: updatedSenderBalance } },
+            },
+          },
+          {
+            updateOne: {
+              filter: { _id: receiver._id },
+              update: { $set: { balance: updatedReceiverBalance } },
+            },
+          },
+          {
+            updateOne: {
+              filter: { _id: admin._id },
+              update: { $set: { balance: updatedAdminBalance } },
+            },
+          },
+        ];
 
-        // Log the transaction
+        await userCollection.bulkWrite(bulkOperations);
+
+        // Log transactions separately
         await logTransaction(
           "cash-out",
           sender.email,
           receiver.email,
           numericAmount
         );
+        await logTransaction("admin-fee", sender.email, admin.email, adminFee);
+        await logTransaction(
+          "agent-fee",
+          sender.email,
+          receiver.email,
+          agentFee
+        );
 
         res.json({
-          message: "Cash Out successfully done",
+          message: "Cash Out successfully processed",
           sender: sender.email,
           receiver: receiver.email,
           fee: totalFee,
@@ -472,7 +489,7 @@ async function run() {
           agentFee,
         });
       } catch (error) {
-        console.error("Error sending money:", error);
+        console.error("Error processing cash-out:", error);
         res.status(500).json({ message: "Internal server error" });
       }
     });
@@ -639,6 +656,128 @@ async function run() {
         });
       } catch (error) {
         console.error("Error sending money:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // Cash request route (Agent to Admin)
+    app.post("/cash-request", async (req, res) => {
+      const { receiverIdentifier, amount, pin } = req.body;
+      const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
+
+      try {
+        // Find sender's information including user type
+        const sender = await userCollection.findOne({ email: senderEmail });
+
+        if (!sender) {
+          return res.status(404).json({ message: "Sender not found" });
+        }
+
+        // Verify sender's user type (Only agents can request cash)
+        if (sender.userType !== "agent") {
+          return res
+            .status(403)
+            .json({ message: "Only agents can request cash" });
+        }
+
+        // Ensure receiver is an admin
+        const receiver = await userCollection.findOne({
+          email: receiverIdentifier,
+          userType: "admin",
+        });
+        if (!receiver) {
+          return res.status(404).json({ message: "Admin not found" });
+        }
+
+        // Verify sender's PIN
+        const isPinMatch = await bcrypt.compare(pin.toString(), sender.pin);
+        if (!isPinMatch) {
+          return res.status(401).json({ message: "Invalid PIN" });
+        }
+
+        // Validate amount
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+          return res.status(400).json({ message: "Invalid amount" });
+        }
+
+        // Log the transaction without charging any fee
+        await logTransaction(
+          "cash-request",
+          sender.email,
+          receiver.email,
+          numericAmount,
+          "pending"
+        );
+
+        res.json({
+          message: "Cash request sent successfully",
+          sender: sender.email,
+          receiver: receiver.email,
+        });
+      } catch (error) {
+        console.error("Error processing cash request:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    // withdraw-request route (Agent to Admin)
+    app.post("/withdraw-request", async (req, res) => {
+      const { receiverIdentifier, amount, pin } = req.body;
+      const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
+
+      try {
+        // Find sender's information including user type
+        const sender = await userCollection.findOne({ email: senderEmail });
+
+        if (!sender) {
+          return res.status(404).json({ message: "Sender not found" });
+        }
+
+        // Verify sender's user type (Only agents can request cash)
+        if (sender.userType !== "agent") {
+          return res
+            .status(403)
+            .json({ message: "Only agents can request cash" });
+        }
+
+        // Ensure receiver is an admin
+        const receiver = await userCollection.findOne({
+          email: receiverIdentifier,
+          userType: "admin",
+        });
+        if (!receiver) {
+          return res.status(404).json({ message: "Admin not found" });
+        }
+
+        // Verify sender's PIN
+        const isPinMatch = await bcrypt.compare(pin.toString(), sender.pin);
+        if (!isPinMatch) {
+          return res.status(401).json({ message: "Invalid PIN" });
+        }
+
+        // Validate amount
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+          return res.status(400).json({ message: "Invalid amount" });
+        }
+
+        // Log the transaction without charging any fee
+        await logTransaction(
+          "withdraw-request",
+          sender.email,
+          receiver.email,
+          numericAmount,
+          "pending"
+        );
+
+        res.json({
+          message: "Cash request sent successfully",
+          sender: sender.email,
+          receiver: receiver.email,
+        });
+      } catch (error) {
+        console.error("Error processing cash request:", error);
         res.status(500).json({ message: "Internal server error" });
       }
     });
@@ -824,7 +963,29 @@ async function run() {
       res.send(test);
     });
 
-    // PATCH route to update transaction status from pending to confirm
+    // DELETE route to remove a transaction log by ID
+    app.delete("/history/:id", verifyToken, async (req, res) => {
+      const { id } = req.params;
+
+      try {
+        // Find and delete the transaction log
+        const result = await transactionCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 1) {
+          res.json({ message: "Transaction request declined successfully" });
+        } else {
+          res.status(404).json({ message: "Transaction not found" });
+        }
+      } catch (error) {
+        console.error("Error deleting transaction log:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    const { ObjectId } = require("mongodb");
+
     app.patch("/history/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
 
@@ -841,7 +1002,7 @@ async function run() {
             .send({ message: "Transaction not found or already confirmed" });
         }
 
-        const { sender, receiver, amount } = transaction;
+        const { sender, receiver, amount, type } = transaction;
 
         // Find sender and receiver
         const senderUser = await userCollection.findOne({ email: sender });
@@ -853,43 +1014,54 @@ async function run() {
             .send({ message: "Sender or receiver not found" });
         }
 
-        // Check if sender has sufficient balance
-        if (receiverUser.balance < amount) {
-          return res.status(400).send({ message: "Insufficient balance" });
+        // Process transactions without deleting logs
+        if (type === "cash-request") {
+          if (receiverUser.balance < amount) {
+            return res
+              .status(400)
+              .send({ message: "Receiver has insufficient balance" });
+          }
+
+          await userCollection.updateOne(
+            { email: sender },
+            { $inc: { balance: amount } }
+          );
+          await userCollection.updateOne(
+            { email: receiver },
+            { $inc: { balance: -amount } }
+          );
+        } else if (type === "withdraw-request") {
+          if (senderUser.balance < amount) {
+            return res
+              .status(400)
+              .send({ message: "Sender has insufficient balance" });
+          }
+
+          await userCollection.updateOne(
+            { email: sender },
+            { $inc: { balance: -amount } }
+          );
+          await userCollection.updateOne(
+            { email: receiver },
+            { $inc: { balance: amount } }
+          );
         }
 
-        // Calculate new balances
-        const updatedSenderBalance = senderUser.balance + amount;
-        const updatedReceiverBalance = receiverUser.balance - amount;
-
-        // Update balances in the database
-        await userCollection.updateOne(
-          { _id: senderUser._id },
-          { $set: { balance: updatedSenderBalance } }
-        );
-
-        await userCollection.updateOne(
-          { _id: receiverUser._id },
-          { $set: { balance: updatedReceiverBalance } }
-        );
-
-        // Update transaction status
+        // Update transaction status to "confirmed" but do NOT delete the log
         const result = await transactionCollection.updateOne(
           { _id: new ObjectId(id), status: "pending" },
           { $set: { status: "confirm" } }
         );
 
         if (result.modifiedCount > 0) {
-          res.send({
-            message: "Transaction status and balances updated successfully",
-          });
+          res.send({ message: "Transaction confirmed successfully" });
         } else {
           res
             .status(404)
             .send({ message: "Transaction not found or already confirmed" });
         }
       } catch (error) {
-        console.error("Error updating transaction status:", error);
+        console.error("Error updating transaction:", error);
         res.status(500).send({ message: "An error occurred", error });
       }
     });
