@@ -661,7 +661,7 @@ async function run() {
     });
 
     // Cash request route (Agent to Admin)
-    app.post("/cash-request", async (req, res) => {
+    app.post("/cash-request", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
@@ -722,7 +722,7 @@ async function run() {
     });
 
     // withdraw-request route (Agent to Admin)
-    app.post("/withdraw-request", async (req, res) => {
+    app.post("/withdraw-request", verifyToken, async (req, res) => {
       const { receiverIdentifier, amount, pin } = req.body;
       const senderEmail = req.body.senderEmail; // Assuming sender's email is passed from frontend
 
@@ -1066,7 +1066,7 @@ async function run() {
       }
     });
 
-    app.get("/income", async (req, res) => {
+    app.get("/income", verifyToken, async (req, res) => {
       try {
         const result = await transactionCollection
           .aggregate([
