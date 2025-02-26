@@ -12,8 +12,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://mfs-ph.web.app",
-      "https://mfs-ph.firebaseapp.com",
+      "https://mobile-financial-service-8e757.web.app",
+      "https://mobile-financial-service-8e757.firebaseapp.com",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -64,40 +64,6 @@ async function run() {
         req.decoded = decoded;
         next();
       });
-    };
-
-    // Admin Middleware
-    const verifyAdmin = async (req, res, next) => {
-      const email = req.decoded.email;
-      const user = await userCollection.findOne({ email });
-
-      if (!user || user.userType !== "admin") {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      next();
-    };
-    // Agent Middleware
-    const verifyAgent = async (req, res, next) => {
-      const email = req.decoded.email;
-      const user = await userCollection.findOne({ email });
-
-      if (!user || user.userType !== "agent") {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      next();
-    };
-    // User Middleware
-    const verifyUser = async (req, res, next) => {
-      const email = req.decoded.email;
-      const user = await userCollection.findOne({ email });
-
-      if (!user || user.userType !== "user") {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      next();
     };
 
     // User registration route
