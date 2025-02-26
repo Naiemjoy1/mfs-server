@@ -1066,6 +1066,38 @@ async function run() {
       }
     });
 
+    app.get("/income", async (req, res) => {
+      try {
+        const result = await transactionCollection
+          .aggregate([
+            {
+              $match: {
+                type: { $in: ["transaction-fee", "admin-fee", "agent-fee"] },
+              },
+            },
+            {
+              $group: {
+                _id: "$receiver",
+                totalAmount: { $sum: "$amount" },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                receiver: "$_id",
+                totalAmount: 1,
+              },
+            },
+          ])
+          .toArray();
+
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching income data:", error);
+        res.status(500).json({ message: "An error occurred", error });
+      }
+    });
+
     console.log("Connected to MongoDB successfully!");
   } finally {
     // await client.close();
